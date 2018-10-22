@@ -3,8 +3,9 @@
 
 Archivator::Archivator(const string &filename)
 {
-	archiv = new fstream();
-	archiv->open(filename);
+	this->filename = filename;
+	archiv = new ofstream();
+	archiv->open(filename, fstream::out | fstream::binary);
 }
 
 Archivator::~Archivator()
@@ -16,4 +17,21 @@ Archivator::~Archivator()
 
 const string &Archivator::getName() {
 	return filename;
+}
+
+void Archivator::AddFile(const string &filename) {
+	ifstream file;
+	file.open(filename, ifstream::in | ifstream::binary);
+}
+
+vector<string> Archivator::GetList() {
+
+}
+
+void Archivator::RemoveFile(const string &filename) {
+
+}
+
+void Archivator::Exctract(const string &directory) {
+
 }
