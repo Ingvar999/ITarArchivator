@@ -21,7 +21,12 @@ public:
 	void Exctract(const string &directory);
 
 private:
-	string filename;
-	ofstream *archiv;
+	static const int blockSize = 512;
+
+	int currentBlocksCount;
+	string archivname;
+
+	fstream *archiv;
+	char buffer[blockSize];
 };
 
