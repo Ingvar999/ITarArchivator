@@ -7,6 +7,7 @@ struct Header {
 	char name[100];
 	uint16_t nextOffset;
 	uint32_t size;
+	bool isValid;
 };
 
 class Archivator{
