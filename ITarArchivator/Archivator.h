@@ -19,7 +19,7 @@ public:
 	void AddFile(const string &filename);
 	vector<string> GetList();
 	void RemoveFile(const string &filename);
-	void Exctract(const string &directory);
+	void ExtractFile(const string &directory, const string &filename);
 
 private:
 	static const int blockSize = 512;

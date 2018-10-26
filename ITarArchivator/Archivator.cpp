@@ -74,6 +74,28 @@ void Archivator::RemoveFile(const string &filename) {
 	}
 }
 
-void Archivator::Exctract(const string &directory) {
-
+void Archivator::ExtractFile(const string &directory, const string &filename) {
+	Header *hed = (Header *)buffer;
+	int currentBlock = 0;
+	while (currentBlock < currentBlocksCount) {
+		archiv->seekg(currentBlock * blockSize);
+		archiv->read(buffer, blockSize);
+		if (filename.compare(hed->name) == 0) {
+			ofstream file;
+			file.open(directory + filename, ofstream::out | ofstream::binary | ofstream::beg);
+			int remain = hed->size;
+			if (remain > 0) {
+				while (remain > blockSize) {
+					archiv->read(buffer, blockSize);
+					file.write(buffer, blockSize);
+					remain -= blockSize;
+				}
+				archiv->read(buffer, blockSize);
+				file.write(buffer, remain);
+			}
+			file.close();
+			return;
+		}
+		currentBlock += hed->nextOffset;
+	}
 }
