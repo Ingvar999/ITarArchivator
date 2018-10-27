@@ -5,7 +5,12 @@ Archivator::Archivator(const string &filename)
 {
 	archivname = filename;
 	archiv = new fstream();
-	archiv->open(filename, fstream::out | fstream::in | fstream::binary | fstream::app | fstream::ate);
+	archiv->open(filename, fstream::out | fstream::in | fstream::binary | fstream::ate);
+	if (!archiv->is_open()) {
+		archiv->open(filename, fstream::out | fstream::app);
+		archiv->close();
+		archiv->open(filename, fstream::out | fstream::in | fstream::binary | fstream::ate);
+	}
 	currentBlocksCount = archiv->tellg() / blockSize;
 }
 
