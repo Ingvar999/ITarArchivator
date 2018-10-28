@@ -3,32 +3,34 @@
 
 Archivator::Archivator(const string &filename)
 {
-	archivname = filename;
-	archiv = new fstream();
-	archiv->open(filename, fstream::out | fstream::in | fstream::binary | fstream::ate);
-	if (!archiv->is_open()) {
-		archiv->open(filename, fstream::out | fstream::app);
-		archiv->close();
-		archiv->open(filename, fstream::out | fstream::in | fstream::binary | fstream::ate);
+	archivename = filename;
+	archive = new fstream();
+	archive->open(filename, fstream::out | fstream::in | fstream::binary | fstream::ate);
+	if (!archive->is_open()) {
+		archive->open(filename, fstream::out | fstream::app);
+		archive->close();
+		archive->open(filename, fstream::out | fstream::in | fstream::binary | fstream::ate);
 	}
-	currentBlocksCount = archiv->tellg() / blockSize;
+	currentBlocksCount = archive->tellg() / blockSize;
 }
 
 Archivator::~Archivator()
 {
-	if (archiv->is_open())
-		archiv->close();
-	delete archiv;
+	if (archive->is_open()) {
+		Compact();
+		archive->close();
+	}
+	delete archive;
 }
 
 const string &Archivator::getName() {
-	return archivname;
+	return archivename;
 }
 
 void Archivator::AddFile(const string &filename) {
 	ifstream file;
 	file.open(filename, ifstream::in | ifstream::binary | ifstream::ate);
-	archiv->seekp(currentBlocksCount * blockSize);
+	archive->seekp(currentBlocksCount * blockSize);
 	
 	fill(begin(buffer), end(buffer), 0);
 	Header *hed = (Header *)buffer;
@@ -39,13 +41,13 @@ void Archivator::AddFile(const string &filename) {
 	hed->nextOffset = (uint16_t)ceilf((float)hed->size / blockSize) + 1;
  	currentBlocksCount += hed->nextOffset;
 
-	archiv->write(buffer, blockSize);
+	archive->write(buffer, blockSize);
 	file.seekg(ios::beg);
 	while (!file.eof()) {
 		file.read(buffer, blockSize);
-		archiv->write(buffer, blockSize);
+		archive->write(buffer, blockSize);
 	}
-	archiv->flush();
+	archive->flush();
 }
 
 vector<string> Archivator::GetList() {
@@ -53,8 +55,8 @@ vector<string> Archivator::GetList() {
 	Header *hed = (Header *)buffer;
 	int currentBlock = 0;
 	while (currentBlock < currentBlocksCount) {
-		archiv->seekg(currentBlock * blockSize);
-		archiv->read(buffer, blockSize);
+		archive->seekg(currentBlock * blockSize);
+		archive->read(buffer, blockSize);
 		if (hed->isValid)
 			result.push_back(hed->name);
 		currentBlock += hed->nextOffset;
@@ -66,14 +68,13 @@ void Archivator::RemoveFile(const string &filename) {
 	Header *hed = (Header *)buffer;
 	int currentBlock = 0;
 	while (currentBlock < currentBlocksCount) {
-		archiv->seekg(currentBlock * blockSize);
-		archiv->read(buffer, blockSize);
-		if (filename.compare(hed->name) == 0) {
+		archive->seekg(currentBlock * blockSize);
+		archive->read(buffer, blockSize);
+		if (hed->isValid && filename.compare(hed->name) == 0) {
 			hed->isValid = false;
-			archiv->seekp(currentBlock * blockSize);
-			archiv->write(buffer, blockSize);
-			archiv->flush();
-			ResizeFile(archivname, currentBlock * blockSize);
+			archive->seekp(currentBlock * blockSize);
+			archive->write(buffer, blockSize);
+			archive->flush();
 			return;
 		}
 		currentBlock += hed->nextOffset;
@@ -84,25 +85,57 @@ void Archivator::ExtractFile(const string &directory, const string &filename) {
 	Header *hed = (Header *)buffer;
 	int currentBlock = 0;
 	while (currentBlock < currentBlocksCount) {
-		archiv->seekg(currentBlock * blockSize);
-		archiv->read(buffer, blockSize);
+		archive->seekg(currentBlock * blockSize);
+		archive->read(buffer, blockSize);
 		if (filename.compare(hed->name) == 0) {
 			ofstream file;
 			file.open(directory + filename, ofstream::out | ofstream::binary | ofstream::beg);
 			int remain = hed->size;
 			if (remain > 0) {
 				while (remain > blockSize) {
-					archiv->read(buffer, blockSize);
+					archive->read(buffer, blockSize);
 					file.write(buffer, blockSize);
 					remain -= blockSize;
 				}
-				archiv->read(buffer, blockSize);
+				archive->read(buffer, blockSize);
 				file.write(buffer, remain);
 			}
 			file.close();
 			return;
 		}
 		currentBlock += hed->nextOffset;
+	}
+}
+
+void Archivator::Compact() {
+	bool haveFreeSpace = false;
+	Header *hed = (Header *)buffer;
+	int currentBlock = 0;
+	while (currentBlock < currentBlocksCount) {
+		archive->seekg(currentBlock * blockSize);
+		archive->read(buffer, blockSize);
+		int n = hed->nextOffset;
+		if (hed->isValid) {
+			if (haveFreeSpace) {
+				archive->write(buffer, blockSize);
+				for (int i = 1; i < n; ++i) {
+					archive->read(buffer, blockSize);
+					archive->write(buffer, blockSize);
+				}
+			}
+		}
+		else {
+			if (!haveFreeSpace) {
+				haveFreeSpace = true;
+				archive->seekp(currentBlock * blockSize);
+			}
+		}
+		currentBlock += n;
+	}
+	if (haveFreeSpace) {
+		ResizeFile(archivename, archive->tellp());
+		currentBlocksCount = archive->tellp() / blockSize;
+		archive->flush();
 	}
 }
 

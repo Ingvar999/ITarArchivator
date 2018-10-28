@@ -25,10 +25,11 @@ private:
 	static const int blockSize = 512;
 
 	int currentBlocksCount;
-	string archivname;
-	fstream *archiv;
+	string archivename;
+	fstream *archive;
 	char buffer[blockSize];
 
+	void Compact();
 	int ResizeFile(const string& filename, int size);
 };
 
