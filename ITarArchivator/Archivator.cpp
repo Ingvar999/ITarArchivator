@@ -109,6 +109,7 @@ void Archivator::ExtractFile(const string &directory, const string &filename) {
 
 void Archivator::Compact() {
 	bool haveFreeSpace = false;
+	int wPos, rPos;
 	Header *hed = (Header *)buffer;
 	int currentBlock = 0;
 	while (currentBlock < currentBlocksCount) {
@@ -117,24 +118,31 @@ void Archivator::Compact() {
 		int n = hed->nextOffset;
 		if (hed->isValid) {
 			if (haveFreeSpace) {
+				rPos = archive->tellg();
+				archive->seekp(wPos);
 				archive->write(buffer, blockSize);
+				wPos += blockSize;
 				for (int i = 1; i < n; ++i) {
+					archive->seekg(rPos);
 					archive->read(buffer, blockSize);
+					archive->seekp(wPos);
 					archive->write(buffer, blockSize);
+					rPos += blockSize;
+					wPos += blockSize;
 				}
 			}
 		}
 		else {
 			if (!haveFreeSpace) {
 				haveFreeSpace = true;
-				archive->seekp(currentBlock * blockSize);
+				wPos = currentBlock * blockSize;
 			}
 		}
 		currentBlock += n;
 	}
 	if (haveFreeSpace) {
-		ResizeFile(archivename, archive->tellp());
-		currentBlocksCount = archive->tellp() / blockSize;
+		ResizeFile(archivename, wPos);
+		currentBlocksCount = wPos / blockSize;
 		archive->flush();
 	}
 }
