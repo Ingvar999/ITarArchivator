@@ -26,8 +26,9 @@ private:
 
 	int currentBlocksCount;
 	string archivname;
-
 	fstream *archiv;
 	char buffer[blockSize];
+
+	int ResizeFile(const string& filename, int size);
 };
 

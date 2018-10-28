@@ -73,6 +73,7 @@ void Archivator::RemoveFile(const string &filename) {
 			archiv->seekp(currentBlock * blockSize);
 			archiv->write(buffer, blockSize);
 			archiv->flush();
+			ResizeFile(archivname, currentBlock * blockSize);
 			return;
 		}
 		currentBlock += hed->nextOffset;
@@ -103,4 +104,15 @@ void Archivator::ExtractFile(const string &directory, const string &filename) {
 		}
 		currentBlock += hed->nextOffset;
 	}
+}
+
+int Archivator::ResizeFile(const string& filename, int size) {
+	HANDLE hFile = CreateFileA(filename.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
+														0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+	if (hFile == INVALID_HANDLE_VALUE)
+		return 1;
+	SetFilePointer(hFile, size, 0, FILE_BEGIN);
+	SetEndOfFile(hFile);
+	CloseHandle(hFile);
+	return 0;
 }
