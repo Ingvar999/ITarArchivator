@@ -20,6 +20,7 @@ public:
 	vector<string> GetList();
 	void RemoveFile(const string &filename);
 	void ExtractFile(const string &directory, const string &filename);
+	void Clear();
 
 private:
 	static const int blockSize = 512;

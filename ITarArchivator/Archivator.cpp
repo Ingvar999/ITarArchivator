@@ -107,6 +107,11 @@ void Archivator::ExtractFile(const string &directory, const string &filename) {
 	}
 }
 
+void Archivator::Clear() {
+	ResizeFile(archivename, 0);
+	currentBlocksCount = 0;
+}
+
 void Archivator::Compact() {
 	bool haveFreeSpace = false;
 	int wPos, rPos;
