@@ -2,6 +2,17 @@
 #include "ITarArchivator.h"
 #include "SimpleFileSystem.h"
 
+struct Header {
+	static const byte file_md = 1;
+	static const byte folder_md = 2;
+
+	char name[100];
+	uint16_t nextOffset;
+	uint32_t size;
+	bool isValid;
+	byte mode;
+};
+
 ITarArchivator::ITarArchivator(const string &filename)
 {
 	archivename = filename;
@@ -30,9 +41,10 @@ const string &ITarArchivator::getArchiveName() {
 	return archivename;
 }
 
-void ITarArchivator::AddFile(const string &filename) {
+int ITarArchivator::AddFile(const string &filename) {
 	ifstream file;
 	file.open(filename, ifstream::in | ifstream::binary | ifstream::ate);
+	int size = file.tellg();
 	archive->seekp(currentBlocksCount * blockSize);
 	
 	fill(begin(buffer), end(buffer), 0);
@@ -40,8 +52,9 @@ void ITarArchivator::AddFile(const string &filename) {
 	string shortname = filename.substr(filename.find_last_of('\\')+1);
 	shortname.copy(hed->name, shortname.size());
 	hed->isValid = true;
-	hed->size = file.tellg();
+	hed->size = size;
 	hed->nextOffset = (uint16_t)ceilf((float)hed->size / blockSize) + 1;
+	hed->mode = Header::file_md;
  	currentBlocksCount += hed->nextOffset;
 
 	archive->write(buffer, blockSize);
@@ -51,6 +64,7 @@ void ITarArchivator::AddFile(const string &filename) {
 		archive->write(buffer, blockSize);
 	}
 	archive->flush();
+	return size;
 }
 
 vector<string> ITarArchivator::GetList() {
@@ -155,8 +169,31 @@ void ITarArchivator::Compact() {
 	}
 }
 
-void ITarArchivator::AddFolder(const string &foldername) {
-
+int ITarArchivator::AddFolder(const string &foldername) {
+	int size = 0;
+	int headerPosition = currentBlocksCount;
+	currentBlocksCount++;
+	vector<string> folders = filesystem->GetContentList(foldername, false, true);
+	for(int i = 0; i < folders.size(); ++i) {
+		if (folders[i] != "." && folders[i] != "..")
+			size += AddFolder(foldername + folders[i] + "\\");
+	}
+	vector<string> files = filesystem->GetContentList(foldername, true, false);
+	for (int i = 0; i < files.size(); ++i) {
+		size += AddFile(foldername + files[i]);
+	}
+	fill(begin(buffer), end(buffer), 0);
+	Header *hed = (Header *)buffer;
+	string shortname = foldername.substr(foldername.find_last_of('\\') + 1);
+	shortname.copy(hed->name, shortname.size());
+	hed->mode = Header::folder_md;
+	hed->isValid = true;
+	hed->size = size;
+	hed->nextOffset = currentBlocksCount - headerPosition;
+	archive->seekp(headerPosition * blockSize);
+	archive->write(buffer, blockSize);
+	archive->flush();
+	return size;
 }
 
 void ITarArchivator::RemoveFolder(const string &foldername) {

@@ -5,13 +5,6 @@
 
 using namespace std;
 
-struct Header {
-	char name[100];
-	uint16_t nextOffset;
-	uint32_t size;
-	bool isValid;
-};
-
 class ITarArchivator : public IArchivator{
 
 public:
@@ -19,10 +12,10 @@ public:
 	~ITarArchivator();
 	const string &getArchiveName() override;
 	vector<string> GetList() override;
-	void AddFile(const string &filename) override;
+	int AddFile(const string &filename) override;
 	void RemoveFile(const string &filename) override;
 	void ExtractFile(const string &directory, const string &filename) override;
-	void AddFolder(const string &foldername) override;
+	int AddFolder(const string &foldername) override;
 	void RemoveFolder(const string &foldername) override;
 	void ExtractFolder(const string &directory, const string &foldername) override;
 	void Clear() override;

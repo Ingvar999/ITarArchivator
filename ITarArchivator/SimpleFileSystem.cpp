@@ -19,13 +19,15 @@ vector<string> SimpleFileSystem::GetContentList(const string &path, bool files, 
 	HANDLE h = FindFirstFileA(dir.c_str(), &fi);
 	if (h != INVALID_HANDLE_VALUE) {
 		do {
-			if (fi.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-				if (directories)
-					result.push_back(fi.cFileName);
+			if (!(fi.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN)) {
+				if (fi.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+					if (directories)
+						result.push_back(fi.cFileName);
+				}
+				else
+					if (files)
+						result.push_back(fi.cFileName);
 			}
-			else
-				if (files)
-					result.push_back(fi.cFileName);
 		} while (FindNextFileA(h, &fi));
 		FindClose(h);
 	}
