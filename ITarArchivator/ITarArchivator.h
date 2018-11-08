@@ -30,5 +30,6 @@ private:
 	IFileSystem *filesystem;
 
 	void Compact();
+	void ReadFolder(vector<string> &result, int &currentBlock, const string &path);
 };
 

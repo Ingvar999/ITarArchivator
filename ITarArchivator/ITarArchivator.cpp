@@ -74,11 +74,44 @@ vector<string> ITarArchivator::GetList() {
 	while (currentBlock < currentBlocksCount) {
 		archive->seekg(currentBlock * blockSize);
 		archive->read(buffer, blockSize);
-		if (hed->isValid)
+		if (hed->isValid) {
 			result.push_back(hed->name);
-		currentBlock += hed->nextOffset;
+			switch (hed->mode)
+			{
+			case Header::file_md:
+				currentBlock += hed->nextOffset;
+				break;
+			case Header::folder_md:
+				ReadFolder(result, currentBlock, string(hed->name) + "\\");
+				break;
+			}
+		}
 	}
 	return result;
+}
+
+void ITarArchivator::ReadFolder(vector<string> &result, int &currentBlock, const string &path) {
+	Header *hed = (Header *)buffer;
+	archive->seekg(currentBlock * blockSize);
+	archive->read(buffer, blockSize);
+	int endFolder = hed->nextOffset + currentBlock;
+	currentBlock++;
+	while (currentBlock != endFolder) {
+		archive->seekg(currentBlock * blockSize);
+		archive->read(buffer, blockSize);
+		if (hed->isValid) {
+			result.push_back(path + hed->name);
+			switch (hed->mode)
+			{
+			case Header::file_md:
+				currentBlock += hed->nextOffset;
+				break;
+			case Header::folder_md:
+				ReadFolder(result, currentBlock, path + hed->name + "\\");
+				break;
+			}
+		}
+	}
 }
 
 void ITarArchivator::RemoveFile(const string &filename) {
@@ -184,7 +217,8 @@ int ITarArchivator::AddFolder(const string &foldername) {
 	}
 	fill(begin(buffer), end(buffer), 0);
 	Header *hed = (Header *)buffer;
-	string shortname = foldername.substr(foldername.find_last_of('\\') + 1);
+	int pos = foldername.find_last_of('\\', foldername.size() - 2) + 1;
+	string shortname = foldername.substr(pos, foldername.size() - pos - 1);
 	shortname.copy(hed->name, shortname.size());
 	hed->mode = Header::folder_md;
 	hed->isValid = true;
