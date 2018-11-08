@@ -2,20 +2,10 @@
 #include "ITarArchivator.h"
 #include "SimpleFileSystem.h"
 
-struct Header {
-	static const byte file_md = 1;
-	static const byte folder_md = 2;
-
-	char name[100];
-	uint16_t nextOffset;
-	uint32_t size;
-	bool isValid;
-	byte mode;
-};
-
 ITarArchivator::ITarArchivator(const string &filename)
 {
 	archivename = filename;
+	hed = (Header *)buffer;
 	archive = new fstream();
 	archive->open(filename, fstream::out | fstream::in | fstream::binary | fstream::ate);
 	if (!archive->is_open()) {
@@ -48,7 +38,6 @@ int ITarArchivator::AddFile(const string &filename) {
 	archive->seekp(currentBlocksCount * blockSize);
 	
 	fill(begin(buffer), end(buffer), 0);
-	Header *hed = (Header *)buffer;
 	string shortname = filename.substr(filename.find_last_of('\\')+1);
 	shortname.copy(hed->name, shortname.size());
 	hed->isValid = true;
@@ -69,29 +58,23 @@ int ITarArchivator::AddFile(const string &filename) {
 
 vector<string> ITarArchivator::GetList() {
 	vector<string> result;
-	Header *hed = (Header *)buffer;
 	int currentBlock = 0;
 	while (currentBlock < currentBlocksCount) {
 		archive->seekg(currentBlock * blockSize);
 		archive->read(buffer, blockSize);
+		int offset = hed->nextOffset;
 		if (hed->isValid) {
 			result.push_back(hed->name);
-			switch (hed->mode)
-			{
-			case Header::file_md:
-				currentBlock += hed->nextOffset;
-				break;
-			case Header::folder_md:
+			if (hed->mode == Header::folder_md){
 				ReadFolder(result, currentBlock, string(hed->name) + "\\");
-				break;
 			}
 		}
+		currentBlock += offset;
 	}
 	return result;
 }
 
-void ITarArchivator::ReadFolder(vector<string> &result, int &currentBlock, const string &path) {
-	Header *hed = (Header *)buffer;
+void ITarArchivator::ReadFolder(vector<string> &result, int currentBlock, const string &path) {
 	archive->seekg(currentBlock * blockSize);
 	archive->read(buffer, blockSize);
 	int endFolder = hed->nextOffset + currentBlock;
@@ -99,40 +82,30 @@ void ITarArchivator::ReadFolder(vector<string> &result, int &currentBlock, const
 	while (currentBlock != endFolder) {
 		archive->seekg(currentBlock * blockSize);
 		archive->read(buffer, blockSize);
+		int offset = hed->nextOffset;
 		if (hed->isValid) {
 			result.push_back(path + hed->name);
-			switch (hed->mode)
-			{
-			case Header::file_md:
-				currentBlock += hed->nextOffset;
-				break;
-			case Header::folder_md:
+			if (hed->mode == Header::folder_md) {
 				ReadFolder(result, currentBlock, path + hed->name + "\\");
-				break;
 			}
 		}
+		currentBlock += offset;
 	}
 }
 
-void ITarArchivator::RemoveFile(const string &filename) {
-	Header *hed = (Header *)buffer;
-	int currentBlock = 0;
-	while (currentBlock < currentBlocksCount) {
-		archive->seekg(currentBlock * blockSize);
+void ITarArchivator::RemoveItem(const string &itemname) {
+	int itemPos;
+	if ((itemPos = SearchItem(itemname)) != -1) {
+		archive->seekg(itemPos * blockSize);
 		archive->read(buffer, blockSize);
-		if (hed->isValid && filename.compare(hed->name) == 0) {
-			hed->isValid = false;
-			archive->seekp(currentBlock * blockSize);
-			archive->write(buffer, blockSize);
-			archive->flush();
-			return;
-		}
-		currentBlock += hed->nextOffset;
+		hed->isValid = false;
+		archive->seekp(itemPos * blockSize);
+		archive->write(buffer, blockSize);
+		archive->flush();
 	}
 }
 
 void ITarArchivator::ExtractFile(const string &directory, const string &filename) {
-	Header *hed = (Header *)buffer;
 	int currentBlock = 0;
 	while (currentBlock < currentBlocksCount) {
 		archive->seekg(currentBlock * blockSize);
@@ -165,7 +138,6 @@ void ITarArchivator::Clear() {
 void ITarArchivator::Compact() {
 	bool haveFreeSpace = false;
 	int wPos, rPos;
-	Header *hed = (Header *)buffer;
 	int currentBlock = 0;
 	while (currentBlock < currentBlocksCount) {
 		archive->seekg(currentBlock * blockSize);
@@ -216,7 +188,6 @@ int ITarArchivator::AddFolder(const string &foldername) {
 		size += AddFile(foldername + files[i]);
 	}
 	fill(begin(buffer), end(buffer), 0);
-	Header *hed = (Header *)buffer;
 	int pos = foldername.find_last_of('\\', foldername.size() - 2) + 1;
 	string shortname = foldername.substr(pos, foldername.size() - pos - 1);
 	shortname.copy(hed->name, shortname.size());
@@ -230,10 +201,61 @@ int ITarArchivator::AddFolder(const string &foldername) {
 	return size;
 }
 
-void ITarArchivator::RemoveFolder(const string &foldername) {
+void ITarArchivator::ExtractFolder(const string &directory, const string &foldername) {
 
 }
 
-void ITarArchivator::ExtractFolder(const string &directory, const string &foldername) {
+int ITarArchivator::SearchItem(string itemname) {
+	int pos;
+	bool isFolder = false;
+	string remaining;
+	if ((pos = itemname.find_first_of('\\')) != -1) {
+		isFolder = true;
+		remaining = itemname.substr(pos + 1);
+		itemname = itemname.substr(0, pos);
+	}
+	int currentBlock = 0;
+	while (currentBlock < currentBlocksCount) {
+		archive->seekg(currentBlock * blockSize);
+		archive->read(buffer, blockSize);
+		if (hed->isValid) {
+			if (itemname.compare(hed->name) == 0) {
+				if (isFolder && hed->mode == Header::folder_md)
+					return SearchItemInFolder(remaining, currentBlock);
+				if (!isFolder && hed->mode == Header::file_md)
+					return currentBlock;
+			}
+		}
+		currentBlock += hed->nextOffset;
+	}
+	return -1;
+}
 
+int ITarArchivator::SearchItemInFolder(string itemname, int currentBlock) {
+	int pos;
+	bool isFolder = false;
+	string remaining;
+	if ((pos = itemname.find_first_of('\\')) != -1) {
+		isFolder = true;
+		remaining = itemname.substr(pos + 1);
+		itemname = itemname.substr(0, pos);
+	}
+	archive->seekg(currentBlock * blockSize);
+	archive->read(buffer, blockSize);
+	int endFolder = currentBlock + hed->nextOffset;
+	currentBlock++;
+	while (currentBlock < endFolder) {
+		archive->seekg(currentBlock * blockSize);
+		archive->read(buffer, blockSize);
+		if (hed->isValid) {
+			if (itemname.compare(hed->name) == 0) {
+				if (isFolder && hed->mode == Header::folder_md)
+					return SearchItemInFolder(remaining, currentBlock);
+				if (!isFolder && hed->mode == Header::file_md)
+					return currentBlock;
+			}
+		}
+		currentBlock += hed->nextOffset;
+	}
+	return -1;
 }
