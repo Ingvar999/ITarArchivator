@@ -38,7 +38,7 @@ int ITarArchivator::AddFile(const string &filename) {
 	archive->seekp(currentBlocksCount * blockSize);
 	
 	fill(begin(buffer), end(buffer), 0);
-	string shortname = filename.substr(filename.find_last_of('\\')+1);
+	string shortname = filesystem->GetShortName(filename);
 	shortname.copy(hed->name, shortname.size());
 	hed->isValid = true;
 	hed->size = size;
@@ -107,26 +107,22 @@ void ITarArchivator::RemoveItem(const string &itemname) {
 
 void ITarArchivator::ExtractFile(const string &directory, const string &filename) {
 	int currentBlock = 0;
-	while (currentBlock < currentBlocksCount) {
+	if ((currentBlock = SearchItem(filename)) != 0) {
+		ofstream file;
+		file.open(directory + filesystem->GetShortName(filename), ofstream::out | ofstream::binary | ofstream::beg);
 		archive->seekg(currentBlock * blockSize);
 		archive->read(buffer, blockSize);
-		if (filename.compare(hed->name) == 0) {
-			ofstream file;
-			file.open(directory + filename, ofstream::out | ofstream::binary | ofstream::beg);
-			int remain = hed->size;
-			if (remain > 0) {
-				while (remain > blockSize) {
-					archive->read(buffer, blockSize);
-					file.write(buffer, blockSize);
-					remain -= blockSize;
-				}
+		int remain = hed->size;
+		if (remain > 0) {
+			while (remain > blockSize) {
 				archive->read(buffer, blockSize);
-				file.write(buffer, remain);
+				file.write(buffer, blockSize);
+				remain -= blockSize;
 			}
-			file.close();
-			return;
+			archive->read(buffer, blockSize);
+			file.write(buffer, remain);
 		}
-		currentBlock += hed->nextOffset;
+		file.close();
 	}
 }
 

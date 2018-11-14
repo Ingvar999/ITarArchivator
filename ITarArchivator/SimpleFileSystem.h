@@ -9,5 +9,6 @@ public:
 	~SimpleFileSystem();
 	vector<string> GetContentList(const string &path, bool files, bool directories) override;
 	int ResizeFile(const string& filename, int size) override;
+	string GetShortName(const string& filename) override;
 };
 

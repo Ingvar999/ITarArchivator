@@ -45,3 +45,7 @@ int SimpleFileSystem::ResizeFile(const string& filename, int size) {
 	CloseHandle(hFile);
 	return 0;
 }
+
+string SimpleFileSystem::GetShortName(const string& filename) {
+	return filename.substr(filename.find_last_of('\\') + 1);
+}
